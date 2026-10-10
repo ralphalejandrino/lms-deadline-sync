@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+# Never commit session state, tokens or relays
+relay/
+*.enc
+*token*.json
+*credentials*.json
+*.sqlite3
+.env
