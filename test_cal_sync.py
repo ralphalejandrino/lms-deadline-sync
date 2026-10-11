@@ -573,6 +573,44 @@ def main() -> int:
     check("D2 collect_blackboard: a filtered-out course lands in blind",
           _blind == {"_2_1"}, str(_blind))
 
+    # D2b. A 403 course is NAMED (2026-10-11): a closed faculty-evaluation shell
+    # leaves the "NOT fully read" warning, a closed real course stays on it, and
+    # BOTH stay blind so neither can propose deleting an event.
+    class _Sess2:
+        uid = "_u"
+        M = [("_1_1", "1STSEM_IAA1_HUMCOM1", "Yes"),
+             ("_2_1", "1STSEM_IAA1_ARTAPP1_EVAL", "No"),
+             ("_3_1", "1STSEM_IAA1_PROGIT1", "No")]
+
+        def get(self, url):
+            if url.endswith("/courses?limit=100"):
+                return {"results": [{"courseId": m[0]} for m in self.M]}
+            if url.endswith("/courses?limit=100&expand=course"):
+                return {"results": [{"courseId": m[0], "course": {
+                    "courseId": m[1], "availability": {"available": m[2]}}} for m in self.M]}
+            for cid, full, av in self.M:
+                if url.endswith(f"/courses/{cid}"):
+                    return {"_status": 403} if av == "No" else {"courseId": full}
+            return {"results": []}
+
+    class _CM2:
+        def __enter__(self): return _Sess2()
+        def __exit__(self, *a): return False
+
+    _cs.open_session = lambda: _CM2()
+    try:
+        _items, _err, (_keys, _blind) = _cs.collect_blackboard()
+    finally:
+        _cs.open_session = _orig
+    check("D2b closed _EVAL shell is NOT in 'NOT fully read'",
+          _err is not None and "_EVAL" not in _err and "_2_1" not in _err, str(_err))
+    check("D2b ...it is listed as a closed evaluation shell instead",
+          _cs.CLOSED_EVAL == ["1STSEM_IAA1_ARTAPP1_EVAL"], str(_cs.CLOSED_EVAL))
+    check("D2b closed REAL course is in 'NOT fully read', by name",
+          "1STSEM_IAA1_PROGIT1" in _err and "closed by the instructor" in _err, str(_err))
+    check("D2b both 403 courses stay blind (no deletes)",
+          _blind == {"_2_1", "_3_1"}, str(_blind))
+
     # D3. OVERDUE CREATE -> the course's next class meeting, placed once.
     _past3 = f"{(datetime.now(MNL) - timedelta(days=3)).date()}T09:00:00.000Z"
     od = item(code="PROGIT1", name="M Lab Quiz 1 (If Else Complete and Trace)",

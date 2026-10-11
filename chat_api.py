@@ -44,13 +44,12 @@ import sys
 sys.path.insert(0, __import__('os').path.dirname(__file__))
 import _quiet_oauth  # noqa: F401
 import gcreds
+from school_config import CODES, course_code  # Nebula Phase 0: one home for shared constants
 
 TOKEN = pathlib.Path.home() / ".config/ub-classroom/token.json"
 CACHE = pathlib.Path.home() / ".cache/ub-lms"
 SEEN = CACHE / "chat_api_seen.json"
 
-CODES = ("PROGIT1", "HUMCOM1", "INTRCS1", "MATHMW1", "LITERA1",
-         "ARTAPP1", "NSTPRO1", "PATHFT1", "CMPTRB1", "SOCORN2")
 
 
 def code_of(display):
@@ -59,11 +58,7 @@ def code_of(display):
     Matches the bare stem too, because `ART APP-IAA1` collapses to `ARTAPPIAA1`
     and never contains the literal `ARTAPP1`.
     """
-    up = re.sub(r"[^A-Z0-9]", "", (display or "").upper())
-    for c in CODES:
-        if c in up or c.rstrip("1") in up:
-            return c
-    return None
+    return course_code(display, stem=True)
 
 
 def _creds():
@@ -76,7 +71,7 @@ def available():
     return gcreds.available("classroom")
 
 
-def fetch(mark_seen=True, per_space=25):
+def fetch(mark_seen=True, per_space=25, records=None):
     """Read every space. Returns (results, failed, dead), matching chat_fetch.fetch().
 
     results maps space displayName -> {"text", "new", "code", "space_id"}.
@@ -96,8 +91,11 @@ def fetch(mark_seen=True, per_space=25):
     results, failed = {}, []
     for sp in spaces:
         # Direct messages are not course channels; skip rather than report them
-        # as unread coursework.
+        # as unread coursework. Nebula (records != None) still reads them, into
+        # `records` ONLY -- they never touch results, coverage or the watermark.
         if sp.get("spaceType") == "DIRECT_MESSAGE":
+            if records is not None:
+                _dm_records(svc, sp, per_space, records)
             continue
         name = sp.get("displayName") or sp.get("name")
         try:
@@ -107,6 +105,10 @@ def fetch(mark_seen=True, per_space=25):
         except Exception:
             failed.append(name)
             continue
+        if records is not None:
+            for m in msgs:
+                if (m.get("text") or "").strip():
+                    records.append(_record(m, "chat_space", name, code_of(name), sp))
         lines = []
         for m in reversed(msgs):
             txt = (m.get("text") or "").strip()
@@ -131,6 +133,43 @@ def fetch(mark_seen=True, per_space=25):
         CACHE.mkdir(parents=True, exist_ok=True)
         SEEN.write_text(json.dumps(seen))
     return results, failed, None
+
+
+# ---- Nebula Phase 0: full message records ---------------------------------
+INSTRUCTOR_DOMAIN = "@e.ubaguio.edu"      # students are @s.ubaguio.edu
+
+
+def _record(m, source, space_name, code, sp, instructor_thread=None):
+    snd = m.get("sender") or {}
+    row = {"source": source, "id": m.get("name"), "course": code,
+           "title": space_name, "author": snd.get("displayName") or "",
+           "author_email": snd.get("email") or "", "when": m.get("createTime"),
+           "url": sp.get("spaceUri") or "", "body": (m.get("text") or "").strip()}
+    if instructor_thread is not None:
+        row["instructor_thread"] = instructor_thread
+    return row
+
+
+def _dm_records(svc, sp, per_space, records):
+    """A DM's messages, flagged `instructor_thread` when any sender is staff.
+
+    Nebula's privacy rule keys on that flag: an instructor DM may go to the
+    judge, a classmate DM never does. A read failure is RECORDED, not dropped.
+    """
+    try:
+        msgs = svc.spaces().messages().list(
+            parent=sp["name"], pageSize=per_space,
+            orderBy="createTime desc").execute().get("messages", [])
+    except Exception as e:
+        records.append({"source": "chat_dm", "error": f"{type(e).__name__}"[:80],
+                        "id": sp.get("name")})
+        return
+    staff = any(((m.get("sender") or {}).get("email") or "").lower()
+                .endswith(INSTRUCTOR_DOMAIN) for m in msgs)
+    for m in msgs:
+        if (m.get("text") or "").strip():
+            records.append(_record(m, "chat_dm", "Direct message", None, sp,
+                                   instructor_thread=staff))
 
 
 def main():

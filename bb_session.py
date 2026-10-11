@@ -60,16 +60,19 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import bb_cookies
 from browser import launch
+from school_config import BASE, PROFILE  # Nebula Phase 0: one home for shared constants
 
-PROFILE = Path.home() / ".local/share/ub-blackboard-profile"
-BASE = "https://blackboard.ubaguio.edu/learn/api/public/v1"
 ORIGIN = "https://blackboard.ubaguio.edu/ultra/course"
 CDP_URL = os.environ.get("LMS_CDP_URL", "http://127.0.0.1:9222")
 
 # Order matters: the real browser is tried FIRST. It is the one Ralph actually
 # logs into, so it is the one most likely to be fresh, and using it means a
 # single human login fixes every scan at once.
-SOURCE_ORDER = ("token", "cdp", "profile")
+# "profile" BEFORE "cdp" (Ralph, 2026-10-11 12:50 AM, CC-APP): the cdp source opened a
+# FOREGROUND Blackboard tab in his real Comet on every sweep and pulled it on top of the
+# email he was reading. The profile is a separate invisible Chromium, so it goes first;
+# cdp is now the last resort, and it opens its tab in the background (see below).
+SOURCE_ORDER = ("token", "profile", "cdp")
 
 
 class SessionDead(RuntimeError):
@@ -296,7 +299,15 @@ def open_session(prefer=None, show=None, quiet=False, allow_relogin=True):
                     if not browser.contexts:
                         attempts.append((source, "CDP connected but browser has no context"))
                         continue
-                    page = browser.contexts[0].new_page()
+                    # BACKGROUND tab, never new_page(): Playwright's new_page() in his real
+                    # Comet comes to the FRONT and steals focus (Ralph, 2026-10-11:
+                    # "stop pulling up blackboard on top"). Target.createTarget with
+                    # background=True is how quiet.py opens tabs without interrupting him.
+                    _ctx0 = browser.contexts[0]
+                    with _ctx0.expect_page(timeout=15000) as _info:
+                        browser.new_browser_cdp_session().send(
+                            "Target.createTarget", {"url": "about:blank", "background": True})
+                    page = _info.value
                     # ⚠ page only. Closing the browser kills Ralph's Comet.
                     opened.append(("page", page))
                 elif source == "profile":

@@ -56,8 +56,8 @@ import json
 import os
 import time
 from pathlib import Path
+from school_config import PROFILE  # Nebula Phase 0: one home for shared constants
 
-PROFILE = Path.home() / ".local/share/ub-blackboard-profile"
 STATE_FILE = PROFILE / "storage_state.json"
 DOMAIN = "ubaguio.edu"
 TTL_DAYS = 7

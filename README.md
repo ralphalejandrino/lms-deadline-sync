@@ -18,6 +18,9 @@ missed item usually wasn't hidden. It was in a channel I hadn't checked that day
   downstream re-derives it.
 - **Calendar events are matched by a stable marker, not by title.** Each event carries a
   `bb:<courseId>:<columnId>` marker, because instructors rename columns in place.
+- **A course that can't be opened is named, not skipped.** Blackboard answers 403 for a course an
+  instructor has closed. The scan looks it up through the enrolment list instead: a closed
+  faculty-evaluation shell is a note, and any other closed course makes the load incomplete.
 - **Deletes are proposed, never executed.** A due date that disappears looks the same as an item
   that was removed, so `apply` prints `PROPOSE_DELETE` and leaves it for a person.
 - **A human's call is never overwritten.** An event a person marked done stays done (`HELD`), even
@@ -36,7 +39,8 @@ missed item usually wasn't hidden. It was in a channel I hadn't checked that day
 | `fb_fetch.py` | public Facebook pages |
 | `cal_sync.py`, `cal_apply.py` | the calendar diff and its writer (CREATE / UPDATE / ADOPT / HELD / TWIN) |
 | `mail_send.py` | sending as the school account, dry-run by default |
-| `test_*.py` | 14 test files, including a check that no secret can be written into the repo |
+| `school_config.py` | the shared constants: time zone, Blackboard host, school account, course codes |
+| `test_*.py` | 16 test files, including a check that no secret can be written into the repo |
 
 ## Running it
 
@@ -48,8 +52,9 @@ missed item usually wasn't hidden. It was in a channel I hadn't checked that day
 ```
 
 Configuration comes from the environment: `LMS_SCHOOL_ACCOUNT` (the student Google account),
-`LMS_MAIL_SUBJECT` (subject prefix for mail to instructors) and `LMS_CDP_URL` (a Chromium
-DevTools endpoint, if you reuse a real browser session). Google OAuth tokens are created with
+`LMS_MAIL_SUBJECT` (subject prefix for mail to instructors), `LMS_CDP_URL` (a Chromium
+DevTools endpoint, if you reuse a real browser session) and `LMS_STATE_DIR` (where `tasks.md`,
+`inbox.md` and `state/ledger.json` live; defaults to two folders above the code). Google OAuth tokens are created with
 `./lms.sh classroom-auth` and `./lms.sh cal-auth` and stay outside the repo.
 
 ## Limits, stated plainly

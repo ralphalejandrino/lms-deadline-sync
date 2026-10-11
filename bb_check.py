@@ -14,8 +14,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from bb_session import probe_all
 from browser import launch
+from school_config import PROFILE  # Nebula Phase 0: one home for shared constants
 
-PROFILE = Path.home() / ".local/share/ub-blackboard-profile"
 SHOTS = Path.home() / ".cache/ub-lms"
 BB_ME = "https://blackboard.ubaguio.edu/learn/api/public/v1/users/me"
 

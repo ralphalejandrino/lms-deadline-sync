@@ -92,6 +92,72 @@ def main():
     check("an unrelated title is not matched",
           not _looks_related("Typing Assignment", "Empathy Map"))
 
+    # 3. 🔴 A 403 COURSE MUST NEVER VANISH (2026-10-11). scan_blackboard used to
+    #    `continue` past it, so a course an instructor CLOSED left no row in `cov`
+    #    and the load still said complete. Closed faculty-evaluation shells are
+    #    the one expected 403 and must NOT raise the alarm forever.
+    import scan as _scan
+    from bb_sweep import classify_unreadable
+
+    def _fake(memb, expand_ok=True):
+        class S:
+            uid = "_u"
+
+            def get(self, url):
+                if url.endswith("/courses?limit=100"):
+                    return {"results": [{"courseId": m[0]} for m in memb]}
+                if url.endswith("/courses?limit=100&expand=course"):
+                    if not expand_ok:
+                        return {"_status": 500}
+                    return {"results": [{"courseId": m[0], "course": {
+                        "courseId": m[1], "availability": {"available": m[2]}}}
+                        for m in memb]}
+                for cid, full, avail in memb:
+                    if url.endswith(f"/courses/{cid}"):
+                        return {"_status": 403} if avail == "No" else {"courseId": full}
+                return {"results": []}
+        return S()
+
+    OPEN = ("_1_1", "1STSEM_IAA1_HUMCOM1", "Yes")
+    EVAL = ("_2_1", "1STSEM_IAA1_ARTAPP1_EVAL", "No")
+    REAL = ("_3_1", "1STSEM_IAA1_PROGIT1", "No")
+
+    def _run(memb, **kw):
+        cov = {}
+        _i, _c, notes, _courses = _scan.scan_blackboard(_fake(memb, **kw), cov, None)
+        return cov, notes
+
+    cov, notes = _run([OPEN, EVAL])
+    check("a closed _EVAL shell adds NO unknown cell",
+          print_matrix(cov) == 0 and "EVAL" not in cov, str(cov))
+    check("...but is still NAMED in the notes, not dropped silently",
+          any("faculty-evaluation" in n and "ARTAPP1" in n for n in notes), str(notes))
+    cov, notes = _run([OPEN, EVAL, REAL])
+    check("🔴 a closed REAL course is UNKNOWN in the matrix",
+          cov.get("PROGIT1", {}).get("gradebook") == UNKNOWN and print_matrix(cov) == 3,
+          str(cov))
+    check("...and named with why in the notes",
+          any("PROGIT1" in n and "closed by the instructor" in n for n in notes), str(notes))
+    cov, notes = _run([OPEN, EVAL], expand_ok=False)
+    check("a failed identity lookup fails toward UNKNOWN (even for the eval shell)",
+          cov.get("_2_1", {}).get("gradebook") == UNKNOWN, str(cov))
+    check("classify_unreadable makes no call for an empty list",
+          classify_unreadable(lambda u: 1 / 0, "_u", []) == ([], []))
+
+    # NEGATIVE CONTROL for 3: the pre-fix behaviour (skip the 403) must be
+    # caught by the assertion above, or the assertion proves nothing.
+    _orig = _scan.classify_unreadable
+    _scan.classify_unreadable = lambda *a: ([], [])          # = the old `continue`
+    try:
+        cov, _n = _run([OPEN, EVAL, REAL])
+    finally:
+        _scan.classify_unreadable = _orig
+    if print_matrix(cov) == 0:
+        print("  PASS  negative control: the old silent skip leaves a closed course invisible")
+    else:
+        print("  FAIL  negative control: the old silent skip was not reproduced")
+        globals()["failed"] += 1
+
     # NEGATIVE CONTROL: prove these assertions can fail. If a knowingly-broken
     # matrix still reports zero, nothing above is being checked.
     if print_matrix({"A": row(gradebook=UNKNOWN)}) == 0:

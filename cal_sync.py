@@ -52,12 +52,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from bb_session import SessionDead, open_session
-from bb_sweep import authoritative_due, BASE, MNL, FMT
+from bb_sweep import authoritative_due, classify_unreadable, BASE, MNL, FMT
+from school_config import PROFILE  # Nebula Phase 0: one home for shared constants
 
 MARKER = re.compile(r"^bb:(_\d+_\d+):(_\d+_\d+)\s*$", re.M)
 # A person's "I did this, Blackboard cannot see it" mark. See human_done().
 HUMAN_DONE = re.compile(r"^\s*human:\s*done\b", re.M | re.I)
-PROFILE = Path.home() / ".local/share/ub-blackboard-profile"
 STAMP = Path.home() / ".local/share/ub-lms-lastverified.json"
 
 # Google Calendar colour ids. Ralph's scheme, 2026-08-27.
@@ -196,6 +196,11 @@ def witnessed(states, grade):
     return (True, [g]) if g else (False, states)
 
 
+# Closed faculty-evaluation shells seen by the last collect_blackboard() run.
+# Printed as information, never as "NOT fully read" (see bb_sweep.classify_unreadable).
+CLOSED_EVAL = []
+
+
 def collect_blackboard(courses_filter=None):
     """Return (items, error, all_keys).
 
@@ -211,6 +216,8 @@ def collect_blackboard(courses_filter=None):
     `all_keys` can tell them apart.
     """
     items, unreadable, all_keys = [], [], set()
+    failed = {}            # cid -> HTTP status of a failed /courses/{id} read
+    CLOSED_EVAL.clear()
     # Course ids whose read FAILED. Their columns are unknown, not absent —
     # without this a transient 401 on one course makes every event in it look
     # orphaned and proposes deleting the lot.
@@ -232,7 +239,7 @@ def collect_blackboard(courses_filter=None):
             cid = m.get("courseId")
             c = get(f"{BASE}/courses/{cid}")
             if c.get("_status"):
-                unreadable.append(f"{cid} ({c['_status']})")
+                failed[cid] = c["_status"]
                 blind.add(cid)
                 continue
             code = (c.get("courseId") or "").split("_")[-1]
@@ -280,6 +287,12 @@ def collect_blackboard(courses_filter=None):
                     "submitted": submitted, "states": states, "warn": warn,
                     "due_unknown": due_unknown,
                 })
+        # Name every failed course. A CLOSED faculty-evaluation shell is expected
+        # and leaves the "NOT fully read" warning; anything else stays on it, now
+        # with its name. Both stay `blind`, so neither can trigger a delete.
+        benign, unknown = classify_unreadable(get, uid, list(failed))
+        CLOSED_EVAL[:] = benign
+        unreadable += [f"{full or cid} ({failed[cid]}, {why})" for cid, full, why in unknown]
     finally:
         cm.__exit__(None, None, None)
     return items, ("; ".join(unreadable) if unreadable else None), (all_keys, blind)
@@ -833,6 +846,9 @@ def main() -> int:
             print(f"  🔴 [{it['code']}] {it['name']!r} {it['warn']}")
     if unreadable:
         print(f"  ⚠ NOT fully read: {unreadable} — treat those courses as UNKNOWN")
+    if CLOSED_EVAL:
+        print(f"  ℹ {len(CLOSED_EVAL)} faculty-evaluation shell(s) not open yet (403 expected): "
+              f"{', '.join(sorted(c.split('_')[-2] for c in CLOSED_EVAL))}")
     for w in window_guard(items, events):
         print(f"  🔴 WINDOW TOO NARROW — {w}\n"
               f"     Its marked event may exist but not be loaded, so any ADOPT or "

@@ -17,11 +17,9 @@ from playwright.sync_api import sync_playwright
 sys.path.insert(0, str(Path(__file__).parent))
 import browser
 from bb_sweep import authoritative_due
+from school_config import BASE, MNL, PROFILE  # Nebula Phase 0: one home for shared constants
 
-PROFILE = Path.home() / ".local/share/ub-blackboard-profile"
 SHOTS = Path.home() / ".cache/ub-lms"
-BASE = "https://blackboard.ubaguio.edu/learn/api/public/v1"
-MNL = timezone(timedelta(hours=8))
 
 
 def to_mnl(iso: str) -> str:

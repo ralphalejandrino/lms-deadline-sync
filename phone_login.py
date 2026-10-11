@@ -12,15 +12,15 @@ exactly like a broken browser. Do not "simplify" this back to threads.
   ./lms.sh env >/dev/null                     # confirms venv + LD_LIBRARY_PATH
   LD_LIBRARY_PATH=$HOME/pwlibs/_extracted/usr/lib/x86_64-linux-gnu \
       $HOME/CRM/.venv/bin/python phone_login.py &
-  tailscale serve --bg --https=8444 3006
+  tailscale serve --bg --https=8445 3006   # NOT 8444 (Nebula) or 8443 (OpenCode)
 
-Then open https://<your-machine>.<your-tailnet>.ts.net:8443 on the phone (tailnet only).
+Then open https://<your-machine>.<your-tailnet>.ts.net:8445 on the phone (tailnet only).
 No X server, no sudo, no VNC. Ctrl-C to stop; cookies persist in the profile.
 """
 import asyncio, json, pathlib, time
 from playwright.async_api import async_playwright
+from school_config import PROFILE  # Nebula Phase 0: one home for shared constants
 
-PROFILE = pathlib.Path.home() / ".local/share/ub-blackboard-profile"
 STATE   = PROFILE / "storage_state.json"
 PORT, W, H = 3006, 1280, 2000
 START = "https://blackboard.ubaguio.edu/"

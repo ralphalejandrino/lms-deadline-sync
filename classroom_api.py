@@ -35,9 +35,9 @@ import gcreds
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from school_config import CODES, MNL, course_code  # Nebula Phase 0: one home for shared constants
 
 TOKEN = Path.home() / ".config/ub-classroom/token.json"
-MNL = timezone(timedelta(hours=8))
 # Subjects this API can never see. Naming them is part of the output contract.
 BLIND = ["PROGIT1", "SOCORN2", "CMPTRB1"]
 
@@ -64,16 +64,10 @@ def due_dt(w):
     ).astimezone(MNL)
 
 
-CODES = ("PROGIT1", "HUMCOM1", "INTRCS1", "MATHMW1", "LITERA1",
-         "ARTAPP1", "NSTPRO1", "PATHFT1", "CMPTRB1", "SOCORN2")
 
 
 def code_of(name):
-    up = re.sub(r"[^A-Z0-9]", "", (name or "").upper())
-    for c in CODES:
-        if c in up or c.rstrip("1") in up:
-            return c
-    return None
+    return course_code(name, stem=True)
 
 
 # 🔴 COURSES RALPH HAS ABANDONED IN CLASSROOM (declared by him, 2026-08-29).
@@ -183,6 +177,8 @@ def fetch():
         for a in anns:
             out["announcements"].append({
                 "course": code, "when": a.get("updateTime"),
+                "id": a.get("id"), "link": a.get("alternateLink"),
+                "body": (a.get("text") or "").strip(),
                 "text": " ".join((a.get("text") or "").split()),
                 "materials": [t.get("title") for m in (a.get("materials") or [])
                               for t in [next(iter(m.values()))]

@@ -43,13 +43,12 @@ import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from school_config import MNL, PROFILE  # Nebula Phase 0: one home for shared constants
 
 sys.path.insert(0, str(Path(__file__).parent))
 
 CACHE = Path.home() / ".cache/ub-lms"
 LOG = CACHE / "warm.log"
-MNL = timezone(timedelta(hours=8))
-PROFILE = Path.home() / ".local/share/ub-blackboard-profile"
 
 
 def log(line):

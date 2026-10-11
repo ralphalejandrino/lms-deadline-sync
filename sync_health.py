@@ -22,9 +22,9 @@ import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from school_config import MNL  # Nebula Phase 0: one home for shared constants
 
 VAULT = Path(__file__).resolve().parents[3]   # …/vault (assets/lms -> school -> vault)
-MNL = timezone(timedelta(hours=8))
 
 
 def git(*a, cwd=VAULT):

@@ -27,11 +27,9 @@ from browser import launch
 from bb_session import SessionDead, open_session
 # Single source of truth for "when is this actually due" -- see bb_sweep.py.
 from bb_sweep import authoritative_due
+from school_config import BASE, MNL, PROFILE  # Nebula Phase 0: one home for shared constants
 
-PROFILE = Path.home() / ".local/share/ub-blackboard-profile"
 STATE = Path.home() / ".local/share/ub-lms-lastrun.json"
-BASE = "https://blackboard.ubaguio.edu/learn/api/public/v1"
-MNL = timezone(timedelta(hours=8))
 SOON_DAYS = 14
 
 

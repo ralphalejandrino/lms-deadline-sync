@@ -22,8 +22,8 @@ from playwright.sync_api import sync_playwright
 
 sys.path.insert(0, str(Path(__file__).parent))
 import bb_cookies
+from school_config import PROFILE  # Nebula Phase 0: one home for shared constants
 
-PROFILE = Path.home() / ".local/share/ub-blackboard-profile"
 SHOTS = Path.home() / ".cache/ub-lms"
 BB_ME = "https://blackboard.ubaguio.edu/learn/api/public/v1/users/me"
 TIMEOUT_S = 900

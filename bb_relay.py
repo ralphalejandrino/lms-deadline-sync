@@ -63,6 +63,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import bb_cookies
+from school_config import MNL  # Nebula Phase 0: one home for shared constants
 
 VAULT = HERE.parents[2]                      # vault/school/assets/lms → vault
 RELAY_DIR = HERE / "relay"
@@ -79,7 +80,6 @@ ENV_KEY = "UB_RELAY_KEY"
 # relay is now refused and called STALE, with the reason, before anything is tried.
 MAX_AGE_S = 4 * 3600
 AGEING_S = 2 * 3600          # RE warms hourly by day; older than this, RE has missed runs
-MNL = timezone(timedelta(hours=8))
 
 
 # ----------------------------------------------------------------- keys

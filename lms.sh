@@ -3,7 +3,7 @@
 #
 # WHY THIS EXISTS
 # The Python in assets/lms/ was always portable -- every path goes through
-# Path.home(), nothing hardcodes /home/ralph. What was NOT portable was the
+# Path.home(), nothing hardcodes a home directory. What was NOT portable was the
 # *invocation*: REWSL needs a specific venv plus an LD_LIBRARY_PATH for the
 # unpacked Playwright libs, and that incantation lived only in prose inside the
 # context-loader skill. So the same command could not be written once and run in
@@ -389,6 +389,14 @@ PYSTALE
             "$PY" test_mail_send.py "$@" || rc=1
             echo
             "$PY" test_bb_relay.py "$@" || rc=1
+            echo
+            "$PY" test_bb_cookies.py "$@" || rc=1
+            echo
+            # Nebula Phase 0: shared constants stay shared, code_of unchanged.
+            "$PY" test_school_config.py "$@" || rc=1
+            echo
+            # Nebula Phase 0: full-body emit + the DM privacy flag.
+            "$PY" test_emit.py "$@" || rc=1
             exit $rc ;;
     *) echo "usage: lms.sh {scan|load|sync-health|digest|sweep|outstanding|cal|apply|cal-auth|recolor-classes|fb|mail|send|warm|login|chat|chat-api|check|sources|bb-token|relay|creds|classroom|classroom-scrape|classroom-auth|test|test-secrets|prime|env} [args...]" >&2; exit 2 ;;
 esac

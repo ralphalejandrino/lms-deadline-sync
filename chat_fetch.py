@@ -20,8 +20,8 @@ It reads. It never sends, replies, or reacts — nothing here writes to a space.
 import argparse, json, pathlib, re, sys, datetime
 from playwright.sync_api import sync_playwright
 import browser
+from school_config import PROFILE  # Nebula Phase 0: one home for shared constants
 
-PROFILE = pathlib.Path.home() / ".local/share/ub-blackboard-profile"
 CACHE = pathlib.Path.home() / ".cache/ub-lms"
 SEEN = CACHE / "chat_seen.json"
 

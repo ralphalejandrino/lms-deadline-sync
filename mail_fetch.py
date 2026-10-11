@@ -49,7 +49,6 @@ wrong mailbox. Only a transport failure falls through.
 connector, which this process has no access to; the session load pulls that half
 itself. See the `context-loader` skill.
 """
-import os
 import argparse
 import html
 import json
@@ -63,9 +62,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent))
 import _quiet_oauth  # noqa: F401
 import browser
 import gcreds
+from school_config import PROFILE, SCHOOL_ACCOUNT  # Nebula Phase 0: one home for shared constants
 
-PROFILE = pathlib.Path.home() / ".local/share/ub-blackboard-profile"
-SCHOOL_ACCOUNT = os.environ.get("LMS_SCHOOL_ACCOUNT", "student@s.ubaguio.edu")
 INBOX = "https://mail.google.com/mail/u/0/#inbox"
 
 # The filter, stated. Each rule prints its own name when it fires, so a wrong
@@ -153,7 +151,37 @@ def _txt(el, sel):
 TOKEN = pathlib.Path.home() / ".config/ub-classroom/token.json"
 
 
-def fetch_api(expect=SCHOOL_ACCOUNT, limit=60):
+def _plain_body(payload):
+    """Readable text of a Gmail `full` payload: text/plain first, else de-tagged HTML."""
+    import base64
+    plain, htm = [], []
+
+    def walk(p):
+        mt = p.get("mimeType", "")
+        data = (p.get("body") or {}).get("data")
+        if data and mt in ("text/plain", "text/html"):
+            txt = base64.urlsafe_b64decode(data + "=" * (-len(data) % 4)).decode("utf-8", "replace")
+            (plain if mt == "text/plain" else htm).append(txt)
+        for c in p.get("parts") or []:
+            walk(c)
+
+    walk(payload)
+    text = "\n".join(plain).strip()
+    # Blackboard's "Daily Notifications" ships a text/plain part that is really its CSS
+    # ("@import url(...)" + style rules), burying the notices (found 2026-10-11). Treat a
+    # CSS-shaped plain part as absent and use the HTML part instead.
+    if text and not ("@import" in text[:300] or text.count("{") > 15):
+        return text
+    if htm:
+        from lms_digest import strip_html
+        # <style>/<script>/<head> CONTENTS are not text; strip_html keeps them
+        # (a Blackboard receipt came out as "@import url(...)" CSS, 2026-10-11).
+        raw = re.sub(r"(?is)<(style|script|head)\b.*?</\1>", " ", "\n".join(htm))
+        return re.sub(r"[ \t\r\f\v]+", " ", strip_html(raw)).strip()
+    return ""
+
+
+def fetch_api(expect=SCHOOL_ACCOUNT, limit=60, bodies=False):
     """Read the inbox through the Gmail API. Returns (items, err).
 
     Preferred over the scrape since 2026-08-29: no browser, so nothing pops up,
@@ -194,7 +222,11 @@ def fetch_api(expect=SCHOOL_ACCOUNT, limit=60):
 
         batch = svc.new_batch_http_request(callback=_collect)
         for m in ids:
+            # bodies=True (Nebula) asks for the FULL message; the default stays
+            # metadata-only, so a normal load costs exactly what it did before.
             batch.add(svc.users().messages().get(
+                userId="me", id=m["id"], format="full") if bodies else
+                svc.users().messages().get(
                 userId="me", id=m["id"], format="metadata",
                 metadataHeaders=["From", "Subject", "Date"]))
         batch.execute()
@@ -219,13 +251,19 @@ def fetch_api(expect=SCHOOL_ACCOUNT, limit=60):
             subject = h.get("subject", "")
             snippet = html.unescape(msg.get("snippet", "") or "")
             act, why = classify(sender, subject, snippet)
-            items.append({
+            row = {
                 "sender": re.sub(r"\s*<[^>]*>", "", sender)[:60] or sender,
                 "subject": subject, "snippet": snippet[:200],
                 "date": (h.get("date", "")[:16]),
                 "unread": "UNREAD" in (msg.get("labelIds") or []),
                 "actionable": act, "why": why,
-            })
+            }
+            if bodies:
+                row.update({"id": msg.get("id"), "thread_id": tid,
+                            "internal_date": msg.get("internalDate"),
+                            "from_email": (re.search(r"<([^>]+)>", sender) or [None, sender])[1],
+                            "body": _plain_body(msg.get("payload") or {}) or snippet})
+            items.append(row)
         # A batch that returned nothing while the list found ids is a failure,
         # not an empty inbox — report it as such rather than "no mail".
         if ids and not items:

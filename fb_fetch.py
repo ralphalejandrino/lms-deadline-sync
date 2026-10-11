@@ -57,12 +57,12 @@ from playwright.sync_api import sync_playwright
 
 sys.path.insert(0, str(Path(__file__).parent))
 from browser import launch
+from school_config import MNL  # Nebula Phase 0: one home for shared constants
 
 PROFILE = Path.home() / ".local/share/ub-fb-profile"
 CACHE = Path.home() / ".cache/ub-lms"
 OUT = CACHE / "fb_data.json"
 SEEN = CACHE / "fb_seen.json"
-MNL = timezone(timedelta(hours=8))
 
 PAGES = {
     "SIT-SB": "https://www.facebook.com/ubsitsbo",

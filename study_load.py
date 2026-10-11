@@ -73,9 +73,8 @@ warnings.filterwarnings("ignore", message=".*[Ss]cope.*")
 sys.path.insert(0, str(Path(__file__).parent))
 import scan                       # noqa: E402  — gather(), mnl(), NA/OK/UNKNOWN
 from bb_session import SessionDead  # noqa: E402
+from school_config import MNL, SCHOOL, SCHOOL_ACCOUNT  # Nebula Phase 0: one home for shared constants
 
-MNL = timezone(timedelta(hours=8))
-SCHOOL = Path(__file__).resolve().parents[2]
 TASKS = SCHOOL / "tasks.md"
 
 
@@ -236,9 +235,26 @@ def build(since=None, no_fb=False, persist=False):
     mail_items, mail_err = None, None
     try:
         import mail_fetch
-        mail_items, mail_err = mail_fetch.fetch_api()
+        # Only ASK for bodies when emitting: the default call is unchanged.
+        mail_items, mail_err = (mail_fetch.fetch_api(bodies=True) if scan.EMIT is not None
+                                else mail_fetch.fetch_api())
     except Exception as e:
         mail_err = f"{type(e).__name__}: {e}"[:140]
+    if scan.EMIT is not None:
+        if mail_err:
+            # A failed pull is recorded as such, so Nebula shows UNKNOWN, not "no mail".
+            scan.EMIT.append({"source": "school_mail", "error": mail_err})
+        for m in mail_items or []:
+            scan._emit(source="school_mail", id=f"gm:{m.get('id')}", course=None,
+                       title=m.get("subject") or "(no subject)", author=m.get("sender") or "",
+                       author_email=m.get("from_email") or "",
+                       when=(datetime.fromtimestamp(int(m["internal_date"]) / 1000, timezone.utc)
+                             .isoformat() if m.get("internal_date") else None),
+                       url=f"https://mail.google.com/mail/u/?authuser={SCHOOL_ACCOUNT}"
+                           f"#all/{m.get('thread_id')}",
+                       body=m.get("body") or m.get("snippet") or "",
+                       unread=m.get("unread"), rule_actionable=m.get("actionable"),
+                       rule_why=m.get("why"))
     mail_actionable = [m for m in (mail_items or []) if m.get("actionable")]
 
     # ---- reconciliation, in Python: dated work on no board AND no calendar ----
@@ -392,13 +408,33 @@ def _brief(a):
             print(f"  ⚠ {n}")
 
 
+def _write_emit(path, rows, art):
+    """Atomic JSONL: a header line (run metadata) then one row per message."""
+    import os
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    head = {"_run": {"when": art.get("when"), "complete": art.get("complete"),
+                     "ok": art.get("ok", True), "rows": len(rows or [])}}
+    with tmp.open("w") as f:
+        f.write(json.dumps(head, ensure_ascii=False) + "\n")
+        for r in rows or []:
+            f.write(json.dumps(r, ensure_ascii=False, default=str) + "\n")
+    os.replace(tmp, path)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--no-fb", action="store_true")
     ap.add_argument("--since", default=None)
     ap.add_argument("--all", action="store_true", help="ignore the last-scan watermark")
+    ap.add_argument("--emit-items", metavar="PATH", default=None,
+                    help="Nebula: also write every message read, with its FULL body, "
+                         "as JSONL to PATH (atomic). Changes nothing else.")
     a = ap.parse_args()
+    if a.emit_items:
+        scan.EMIT = []
 
     since = a.since
     if not since and not a.all and scan.LEDGER.exists():
@@ -408,6 +444,8 @@ def main():
             since = None
 
     art, dead = build(since=since, no_fb=a.no_fb, persist=True)
+    if a.emit_items:
+        _write_emit(a.emit_items, scan.EMIT, art)
     if a.json:
         print(json.dumps(art, indent=1))
     else:

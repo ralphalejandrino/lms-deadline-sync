@@ -32,7 +32,6 @@ unless it is Ralph's school address. The signal is the one Google renders for a
 human — `a[aria-label*='Google Account']`, whose label carries the active
 account's email and NOT the other entries in the switcher.
 """
-import os
 import argparse
 import pathlib
 import re
@@ -42,9 +41,8 @@ from playwright.sync_api import sync_playwright
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 import browser
+from school_config import CODES, PROFILE, SCHOOL_ACCOUNT, course_code  # Nebula Phase 0: one home for shared constants
 
-PROFILE = pathlib.Path.home() / ".local/share/ub-blackboard-profile"
-SCHOOL_ACCOUNT = os.environ.get("LMS_SCHOOL_ACCOUNT", "student@s.ubaguio.edu")
 HOME = "https://classroom.google.com/h"
 TODO = "https://classroom.google.com/a/not-turned-in/all"
 
@@ -57,16 +55,10 @@ CLASSROOM_COURSES = ("MATHMW1", "NSTPRO1", "INTRCS1")
 # Course code out of a Classroom course title, e.g. "2627_IAA1-INTRCS1" or
 # "1 - IAA1 - NSTPRO1". The codes are fixed and few, so match them rather than
 # trying to parse a naming scheme the instructors do not share.
-CODES = ("PROGIT1", "HUMCOM1", "INTRCS1", "MATHMW1", "LITERA1",
-         "ARTAPP1", "NSTPRO1", "PATHFT1", "CMPTRB1", "SOCORN2")
 
 
 def code_of(title):
-    up = (title or "").upper().replace(" ", "")
-    for c in CODES:
-        if c in up:
-            return c
-    return None
+    return course_code(title, stem=False)
 
 
 def active_account(page):

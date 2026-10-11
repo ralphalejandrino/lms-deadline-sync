@@ -6,7 +6,7 @@
 ## Why this exists
 
 The vault auto-commits and pushes to GitHub from a Stop hook at the end of every
-turn. A secret written anywhere inside `/home/ralph/vault` is therefore a
+turn. A secret written anywhere inside `~/vault` is therefore a
 PUBLISHED secret within one turn, and `git` keeps it after the file is deleted.
 So the credentials live at `~/.config/ub-school/credentials.json`, outside the
 vault, exactly like `~/.config/ub-calendar/` — and this test is the standing

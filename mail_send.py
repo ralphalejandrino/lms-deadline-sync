@@ -42,18 +42,18 @@ or a hook.
 the web UI and does not apply to an API send.
 """
 from __future__ import annotations
+import os
 
 import argparse
 import base64
-import os
 import mimetypes
 import sys
 from email.message import EmailMessage
 from pathlib import Path
 
 import gcreds
+from school_config import SCHOOL_ACCOUNT  # Nebula Phase 0: one home for shared constants
 
-SCHOOL_ACCOUNT = os.environ.get("LMS_SCHOOL_ACCOUNT", "student@s.ubaguio.edu")
 SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send"
 
 # Ralph's standing subject for anything UB. The `email-draft` skill owns the

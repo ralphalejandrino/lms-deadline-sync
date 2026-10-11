@@ -37,11 +37,30 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from bb_session import BASE, SessionDead, open_session          # noqa: E402
-from bb_sweep import authoritative_due, walk                     # noqa: E402
+from bb_sweep import authoritative_due, classify_unreadable, walk  # noqa: E402
 from lms_digest import ACTION_WORDS, classify_attempts, strip_html  # noqa: E402
+from school_config import BB_HOST, MNL, SCHOOL  # Nebula Phase 0: one home for shared constants
 
-MNL = timezone(timedelta(hours=8))
-SCHOOL = Path(__file__).resolve().parents[2]        # …/vault/school
+# ---- Nebula Phase 0: the full-body message record ---------------------------
+# When EMIT is a list, every message a source READS is also recorded here with its
+# WHOLE body -- not just the keyword hits, and not cut to 220 chars. That cut is
+# why free text never reached the brief (09-27: five items missed on a
+# `complete: true` load). EMIT is None by default, so scan/load behave exactly
+# as before unless study_load is run with --emit-items.
+EMIT = None
+_FORM = re.compile(r"https?://\S*(forms\.gle|docs\.google\.com/forms)\S*")
+
+
+def _keyword_hit(text):
+    t = text or ""
+    return bool(ACTION_WORDS.search(t) or EXAM_WORDS.search(t) or _FORM.search(t))
+
+
+def _emit(**row):
+    if EMIT is not None:
+        row["keyword_hit"] = _keyword_hit(row.get("body"))
+        EMIT.append(row)
+
 INBOX = SCHOOL / "inbox.md"
 LEDGER = SCHOOL / "state" / "ledger.json"
 
@@ -111,13 +130,28 @@ def scan_blackboard(sess, cov, since):
         notes.append(f"course list unreadable (status {memb['_status']})")
         return items, candidates, notes, None
 
-    courses = []
+    courses, failed = [], []
     for m in memb.get("results", []):
         cid = m.get("courseId")
         c = sess.get(f"{BASE}/courses/{cid}")
         if c.get("_status"):
+            # Was a bare `continue`: the course never reached `cov`, so a closed
+            # REAL course would vanish while `complete` stayed true (2026-10-11).
+            failed.append(cid)
             continue
         courses.append({"cid": cid, "code": code_of(c), "name": c.get("name") or ""})
+
+    benign, unknown = classify_unreadable(sess.get, sess.uid, failed)
+    if benign:
+        notes.append(f"Blackboard: {len(benign)} faculty-evaluation shell(s) not open yet "
+                     f"(403 is expected): {', '.join(sorted(b.split('_')[-2] for b in benign))}")
+    for cid, full, why in unknown:
+        key = code_of({"courseId": full}) if full else cid
+        cov.setdefault(key, {s: NA for s in SOURCES})
+        for s in ("gradebook", "announcements", "contents"):
+            cov[key][s] = UNKNOWN
+        notes.append(f"🔴 Blackboard course {full or cid} ({cid}) unreadable, {why}. "
+                     f"UNKNOWN, not 'nothing due'")
 
     for c in courses:
         cid, code = c["cid"], c["code"]
@@ -162,6 +196,10 @@ def scan_blackboard(sess, cov, since):
             cov[code]["announcements"] = OK
             for a in anns.get("results", []):
                 created = a.get("created") or ""
+                _emit(source="bb_announce", id=f"bb:{cid}:{a.get('id')}", course=code,
+                      title=a.get("title") or "(untitled)", author="", author_email="",
+                      when=created, url=f"{BB_HOST}/ultra/courses/{cid}/announcements",
+                      body=strip_html(a.get("body") or ""))
                 if not newer(created, since):
                     continue
                 body = strip_html(a.get("body") or "")
@@ -232,6 +270,10 @@ def scan_facebook(cov):
             # candidates (latent bug found 2026-08-29). ACTION_WORDS now actually
             # sees the post.
             txt = p.get("text") or ""
+            _emit(source="fb", id=f"fb:{page}:{p.get('key')}", course=None,
+                  title=f"Facebook — {page}", author=page, author_email="",
+                  when=p.get("approx_date") or p.get("when"), url=p.get("url") or "",
+                  body=txt)
             if p.get("new") and ACTION_WORDS.search(txt):
                 out.append({"course": "—", "kind": f"facebook/{page}",
                             "title": txt[:70], "when": p.get("when"),
@@ -261,7 +303,7 @@ def scan_chat(cov, since):
         import chat_api
         if not chat_api.available():
             raise ImportError("no token")
-        results, failed, dead = chat_api.fetch()
+        results, failed, dead = chat_api.fetch(records=EMIT)
         code_for = chat_api.code_of
     except Exception as e:
         note_src = (f"Chat via BROWSER SCRAPE ({type(e).__name__}) — its space list is "
@@ -389,6 +431,10 @@ def _classroom_from_api(cov, api, since):
             "quote": it.get("link") or "",
         })
     for a in api["announcements"]:
+        _emit(source="classroom", id=f"gc:{a.get('id')}", course=a.get("course"),
+              title=f"Classroom — {a.get('course') or '?'}", author="", author_email="",
+              when=a.get("when"), url=a.get("link") or "",
+              body=a.get("body") or a.get("text") or "")
         if not newer(a.get("when"), since):
             continue
         hit = ACTION_WORDS.search(a["text"] or "")

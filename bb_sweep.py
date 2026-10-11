@@ -42,13 +42,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from bb_session import SessionDead, open_session
+from school_config import BASE, MNL  # Nebula Phase 0: one home for shared constants
 
 # Written ONLY after a pull that actually authenticated. Silence is not proof of
 # calm: the cron reads school mail and cannot see Blackboard at all, so "no
 # notification" must never be mistaken for "nothing changed".
 STAMP = Path.home() / ".local/share/ub-lms-lastverified.json"
-BASE = "https://blackboard.ubaguio.edu/learn/api/public/v1"
-MNL = timezone(timedelta(hours=8))
 
 # am/pm everywhere. Ralph reads 24-hour time as a conversion tax on every glance.
 FMT = "%a %d %b %I:%M %p"
@@ -79,6 +78,44 @@ def authoritative_due(get, cid, colid, list_due):
     if real != list_due:
         return real, f"⚠ DUE MISMATCH — list said {mnl(list_due)}, item says {mnl(real)} (item wins)"
     return real, None
+
+
+# 🔴 A 403 ON /courses/{id} USED TO BE ANONYMOUS (identified 2026-10-11). Since
+# 2026-09-24 the membership list has carried ten `1STSEM2627_IAA1_<CODE>_EVAL`
+# faculty-evaluation shells; while an instructor keeps one closed
+# (availability.available = "No") EVERY endpoint on it is 403, so `apply` printed
+# nine unidentified ids for two weeks and `scan` dropped them with a bare
+# `continue` -- which would ALSO have hidden a real course an instructor closed.
+# The membership list with ?expand=course still returns the course object for a
+# closed course, and that is the only place its identity can be read.
+def classify_unreadable(get, uid, cids):
+    """Identify course ids whose /courses/{id} read failed.
+
+    Returns (benign, unknown):
+      benign  -- [courseId] of CLOSED faculty-evaluation shells. Expected, no work.
+      unknown -- [(cid, courseId_or_None, why)] for everything else. These must be
+                 reported UNKNOWN: a closed real course can still hold deadlines.
+    Fails toward unknown: if the lookup itself fails, every id is unknown.
+    """
+    if not cids:
+        return [], []
+    r = get(f"{BASE}/users/{uid}/courses?limit=100&expand=course")
+    known = {} if r.get("_status") else {
+        m.get("courseId"): (m.get("course") or {}) for m in r.get("results", [])}
+    benign, unknown = [], []
+    for cid in cids:
+        c = known.get(cid)
+        if not c:
+            unknown.append((cid, None, "unidentified"))
+            continue
+        code = c.get("courseId") or ""
+        closed = (c.get("availability") or {}).get("available") == "No"
+        if closed and code.upper().endswith("_EVAL"):
+            benign.append(code)
+        else:
+            unknown.append((cid, code or None,
+                            "closed by the instructor" if closed else "open but unreadable"))
+    return benign, unknown
 
 
 def main() -> int:

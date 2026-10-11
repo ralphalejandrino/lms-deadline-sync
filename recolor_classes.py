@@ -20,10 +20,9 @@ import sys
 
 from cal_apply import CALENDAR_ID, service
 from cal_sync import COLOR_CLASS, is_work_event
+from school_config import CODES  # Nebula Phase 0: one home for shared constants
 
 # Every course code that owns a recurring block. From school/schedule.md.
-CODES = ("PROGIT1", "HUMCOM1", "INTRCS1", "MATHMW1", "LITERA1",
-         "ARTAPP1", "NSTPRO1", "PATHFT1", "CMPTRB1", "SOCORN2")
 
 MANAGED = ("📌", "✅", "🔴", "💼")
 

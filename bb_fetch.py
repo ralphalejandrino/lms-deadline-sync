@@ -15,9 +15,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from bb_session import SessionDead, open_session
+from school_config import BASE  # Nebula Phase 0: one home for shared constants
 
 OUT = Path.home() / ".cache/ub-lms/bb_data.json"
-BASE = "https://blackboard.ubaguio.edu/learn/api/public/v1"
 
 
 def main() -> int:

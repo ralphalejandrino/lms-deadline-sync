@@ -389,6 +389,9 @@ def run(courses, write):
             print(f"  🔴 [{it['code']}] {it['name']!r} {it['warn']}")
     if unreadable:
         print(f"  ⚠ NOT fully read: {unreadable} — treat those courses as UNKNOWN")
+    if cal_sync.CLOSED_EVAL:
+        print(f"  ℹ {len(cal_sync.CLOSED_EVAL)} faculty-evaluation shell(s) not open yet "
+              f"(403 expected): {', '.join(sorted(c.split('_')[-2] for c in cal_sync.CLOSED_EVAL))}")
 
     if not actions:
         print("\n✅ calendar matches Blackboard — nothing to change")
