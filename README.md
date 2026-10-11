@@ -8,6 +8,11 @@ I built it because deadlines at my university are scattered across five channels
 rename and re-date gradebook columns in place, and some announce exams only in a group chat. A
 missed item usually wasn't hidden. It was in a channel I hadn't checked that day.
 
+> **A cleaned-up copy, prepared for publication.** This is a scrubbed snapshot of the toolchain I run
+> privately, published for reading. Names of people, account details, gradebook IDs and
+> machine-specific paths are replaced; data, tokens and session state are left out. The history
+> here starts at publication; the working history stays private.
+
 ## The rules it is built around
 
 - **A failed pull is `UNKNOWN`, never "nothing due".** An empty result and an unreadable source
