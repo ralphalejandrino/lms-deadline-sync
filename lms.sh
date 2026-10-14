@@ -320,6 +320,10 @@ PYSTALE
     # columns INTRCS1 files everything under. Run this -- not digest --
     # before answering "is there anything else outstanding?".
     sweep)  prime || exit 1; locked bb_sweep.py "$@" ;;
+    # Every Blackboard file + page text, every course, incremental → ~/.local/share/nebula/materials
+    # (2026-10-12: Gemini lacked the MATHMW1 PPT that was only on Blackboard). Nebula publishes it to Drive.
+    # + instructors' Chat uploads (chat_mirror.py, 2026-10-13). Worst exit code wins.
+    mirror) prime || exit 1; rc=0; locked bb_mirror.py "$@" || rc=$?; "$PY" chat_mirror.py || { r=$?; [ $r -gt $rc ] && rc=$r; }; exit $rc ;;
     chat-api) exec "$PY" chat_api.py "$@" ;;
     chat)   prime || exit 1; locked chat_fetch.py "$@" ;;
     # The FINISHED answer to "what do I still have to do" -- only the items with
@@ -375,6 +379,10 @@ PYSTALE
             "$PY" test_session_recovery.py "$@" || rc=1
             echo
             "$PY" test_scan.py "$@" || rc=1
+            echo
+            "$PY" test_bb_mirror.py "$@" || rc=1
+            echo
+            "$PY" test_chat_mirror.py "$@" || rc=1
             echo
             "$PY" test_scan_sources.py "$@" || rc=1
             echo
